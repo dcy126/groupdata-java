@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>上传excel</title>
+</head>
+<body>
+    <form id="upload-form" th:action="@{/uploadExcel}" method="post" enctype="multipart/form-data">
+        　　　请放入需要上传的文件：<input type="file" name="file" accept=".xlsx"/> <br />
+        　　　上传：<input type="submit"/>
+    </form>
+</body>
+</html>

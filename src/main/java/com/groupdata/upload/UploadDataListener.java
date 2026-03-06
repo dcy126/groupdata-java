@@ -65,22 +65,21 @@ public class UploadDataListener implements ReadListener<UploadData> {
     /**
      * 加上存储数据库
      */
+
     private void saveData(){
-        if(cachedDataList.size() == 0)
-        {
+        if(cachedDataList.isEmpty()) {
             log.info("未检测到更新数据，存储数据库结束。");
             return;
         }
         log.info("{}条数据，开始存储数据库！", cachedDataList.size());
-        try{
+        try {
             service.save(cachedDataList);
+            log.info("存储数据库成功！");
+        } catch (Exception e) {
+            log.error("存储数据库失败！", e);
+            // 抛出运行时异常，强制中断 EasyExcel 的读取，并触发 Spring 事务回滚
+            throw new RuntimeException("数据库保存失败，已终止解析", e);
         }
-        catch (SQLException e){
-            log.error("{}",e);
-            log.error("存储数据库失败！");
-            return;
-        };
-        log.info("存储数据库成功！");
     }
 
 }

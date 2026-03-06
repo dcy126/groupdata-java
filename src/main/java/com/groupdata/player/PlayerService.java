@@ -1,359 +1,199 @@
 package com.groupdata.player;
 
 import com.alibaba.fastjson.JSONObject;
+import com.groupdata.base.BaseService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Repository;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.ArrayList;
+import java.util.List;
 
-import com.groupdata.base.BaseService;
-
-@Repository
+@Service
 @Transactional
 @Slf4j
 public class PlayerService {
+
     @Autowired
-    private DataSource dataSource;
+    private JdbcTemplate jdbcTemplate;
 
-    public JSONObject getRoleData(String c_player) throws SQLException {
-        Connection connection = null;
-        Statement statement = null;
-        ResultSet resultSet = null;
-        ArrayList<JSONObject> res=new ArrayList<>();
-        String  tab[]={"ZHU","ZHONG","FAN","NEI","QUAN"};
+    @Autowired
+    private BaseService baseService; // 注入 BaseService 获取 overview 数据
 
-        connection = this.dataSource.getConnection();
-        statement = connection.createStatement();
-        StringBuilder strSQL=new StringBuilder();
-        strSQL.append("select \"ROLE\",\"WIN_ZHU\",\"TOTAL_ZHU\",\"WIN_ZHONG\",\"TOTAL_ZHONG\",\"WIN_FAN\",\"TOTAL_FAN\",\"WIN_NEI\",\"TOTAL_NEI\",\"WIN\",\"TOTAL\"\n");
-        strSQL.append(" from f_f_role('");
-        strSQL.append(c_player);
-        strSQL.append("')\n");
-        strSQL.append("order by \"TOTAL\" desc\n");
-        resultSet = statement.executeQuery(strSQL.toString());
-        int n=0;
-        while (resultSet.next()) {
-            JSONObject R=new JSONObject();
-            R.put("id",n++);
-            int i=1;
-            R.put("ROLE",resultSet.getString(i++));
-            double weight=0.0;
-            int w=0;
-            for(String j:tab)
-            {
-                int win=resultSet.getInt(i++);
-                int total=resultSet.getInt(i++);
-                double percentage=((double)win)/total;
-                if(!Double.isNaN(percentage))
-                    switch (j)
-                    {
+    public JSONObject getRoleData(String c_player) {
+        String[] tab = {"ZHU", "ZHONG", "FAN", "NEI", "QUAN"};
+        String sql = "select \"ROLE\",\"WIN_ZHU\",\"TOTAL_ZHU\",\"WIN_ZHONG\",\"TOTAL_ZHONG\",\"WIN_FAN\",\"TOTAL_FAN\",\"WIN_NEI\",\"TOTAL_NEI\",\"WIN\",\"TOTAL\" " +
+                "from f_f_role(?) order by \"TOTAL\" desc";
+
+        List<JSONObject> res = jdbcTemplate.query(sql, (rs, rowNum) -> {
+            JSONObject R = new JSONObject();
+            R.put("id", rowNum);
+            int i = 1;
+            R.put("ROLE", rs.getString(i++));
+            double weight = 0.0;
+            int w = 0;
+            for (String j : tab) {
+                int win = rs.getInt(i++);
+                int total = rs.getInt(i++);
+                double percentage = total == 0 ? 0.0 : ((double) win) / total;
+                if (!Double.isNaN(percentage)) {
+                    switch (j) {
                         case "ZHU":
                         case "NEI":
-                            weight+=percentage;
-                            w+=1;
-                            break;
+                            weight += percentage; w += 1; break;
                         case "ZHONG":
-                            weight+=2*percentage;
-                            w+=2;
-                            break;
+                            weight += 2 * percentage; w += 2; break;
                         case "FAN":
-                            weight+=4*percentage;
-                            w+=4;
-                            break;
-                        default:
+                            weight += 4 * percentage; w += 4; break;
                     }
-                JSONObject Z=new JSONObject();
-                Z.put("WIN",win);
-                Z.put("TOTAL",total);
-                Z.put("PERCENTAGE",percentage);
-                R.put(j,Z);
+                }
+                JSONObject Z = new JSONObject();
+                Z.put("WIN", win);
+                Z.put("TOTAL", total);
+                Z.put("PERCENTAGE", percentage);
+                R.put(j, Z);
             }
-            R.put("WEIGHT",weight/w);
-            R.put("TOTAL",resultSet.getInt(i-1));
-            res.add(R);
-        }
-        if (resultSet != null) {
-            resultSet.close();
-        }
-        if (statement != null) {
-            statement.close();
-        }
-        if (connection != null) {
-            connection.close();
-        }
+            R.put("WEIGHT", w == 0 ? 0 : weight / w);
+            R.put("TOTAL", rs.getInt(i - 1));
+            return R;
+        }, c_player);
 
-        JSONObject obj=new JSONObject();
-        obj.put("results",res);
+        JSONObject obj = new JSONObject();
+        obj.put("results", res);
         return obj;
     }
 
+    public JSONObject getPlayerData(String c_role) {
+        String[] tab = {"ZHU", "ZHONG", "FAN", "NEI", "QUAN"};
+        double[] over = baseService.getOverView(false);
 
-    public JSONObject getPlayerData(String c_role) throws  SQLException{
-        Connection connection = null;
-        Statement statement = null;
-        ResultSet resultSet = null;
-        ArrayList<JSONObject> res=new ArrayList<>();
-        //String  tab[]={"PLAYER","WIN_ZHU","TOTAL_ZHU","WIN_ZHONG","TOTAL_ZHONG","WIN_FAN","TOTAL_FAN","WIN_NEI","TOTAL_NEI","WIN","TOTAL"};
-        String  tab[]={"ZHU","ZHONG","FAN","NEI","QUAN"};
-        double over[]= BaseService.getOverView(this.dataSource);
+        String sql = "select \"PLAYER\",\"WIN_ZHU\",\"TOTAL_ZHU\",\"WIN_ZHONG\",\"TOTAL_ZHONG\",\"WIN_FAN\",\"TOTAL_FAN\",\"WIN_NEI\",\"TOTAL_NEI\",\"WIN\",\"TOTAL\" " +
+                "from f_f_player(?) order by \"TOTAL\" desc";
 
-        connection = this.dataSource.getConnection();
-        statement = connection.createStatement();
-        StringBuilder strSQL=new StringBuilder();
-        strSQL.append("select \"PLAYER\",\"WIN_ZHU\",\"TOTAL_ZHU\",\"WIN_ZHONG\",\"TOTAL_ZHONG\",\"WIN_FAN\",\"TOTAL_FAN\",\"WIN_NEI\",\"TOTAL_NEI\",\"WIN\",\"TOTAL\"\n");
-        strSQL.append(" from f_f_player('");
-        strSQL.append(c_role);
-        strSQL.append("')\n");
-        strSQL.append("order by \"TOTAL\" desc\n");
-        resultSet = statement.executeQuery(strSQL.toString());
-        int n=0;
-        while (resultSet.next()) {
-            JSONObject R=new JSONObject();
-            R.put("id",n++);
-            int i=1;
-            R.put("PLAYER",resultSet.getString(i++));
-            for(int j=0;j<5;j++)
-            {
-                int win=resultSet.getInt(i++);
-                int total=resultSet.getInt(i++);
-                double percentage=((double)win)/total;
-                JSONObject Z=new JSONObject();
-                Z.put("WIN",win);
-                Z.put("TOTAL",total);
-                Z.put("PERCENTAGE",percentage);
-                Z.put("RED",percentage>over[j]);
-                R.put(tab[j],Z);
+        List<JSONObject> res = jdbcTemplate.query(sql, (rs, rowNum) -> {
+            JSONObject R = new JSONObject();
+            R.put("id", rowNum);
+            int i = 1;
+            R.put("PLAYER", rs.getString(i++));
+            for (int j = 0; j < 5; j++) {
+                int win = rs.getInt(i++);
+                int total = rs.getInt(i++);
+                double percentage = total == 0 ? 0.0 : ((double) win) / total;
+                JSONObject Z = new JSONObject();
+                Z.put("WIN", win);
+                Z.put("TOTAL", total);
+                Z.put("PERCENTAGE", percentage);
+                Z.put("RED", percentage > over[j]);
+                R.put(tab[j], Z);
             }
-            R.put("TOTAL",resultSet.getInt(i-1));
-            res.add(R);
-        }
-        if (resultSet != null) {
-            resultSet.close();
-        }
-        if (statement != null) {
-            statement.close();
-        }
-        if (connection != null) {
-            connection.close();
-        }
+            R.put("TOTAL", rs.getInt(i - 1));
+            return R;
+        }, c_role);
 
-        JSONObject obj=new JSONObject();
-        obj.put("results",res);
+        JSONObject obj = new JSONObject();
+        obj.put("results", res);
         return obj;
     }
 
-    public JSONObject getPlayerRank() throws  SQLException{
-        Connection connection = null;
-        Statement statement = null;
-        ResultSet resultSet = null;
-        ArrayList<JSONObject> res=new ArrayList<>();
-        //String  tab[]={"PLAYER","WIN_ZHU","TOTAL_ZHU","WIN_ZHONG","TOTAL_ZHONG","WIN_FAN","TOTAL_FAN","WIN_NEI","TOTAL_NEI","WIN","TOTAL"};
-        String  tab[]={"ZHU","ZHONG","FAN","NEI","QUAN"};
-        double over[]= BaseService.getOverView(this.dataSource);
+    public JSONObject getPlayerRank() {
+        String[] tab = {"ZHU", "ZHONG", "FAN", "NEI", "QUAN"};
+        double[] over = baseService.getOverView(false);
 
-        connection = this.dataSource.getConnection();
-        statement = connection.createStatement();
-        StringBuilder strSQL=new StringBuilder();
-        strSQL.append("select \"DJH\",\"DATE\",\"PLAYER_1\",\"PLAYER_2\",\"PLAYER_3\",\"PLAYER_4\",\"PLAYER_5\",\"PLAYER_6\",\"PLAYER_7\",\"PLAYER_8\",\"WIN\"\n");
-        strSQL.append(" from t_base\n");
-        strSQL.append("order by \"DATE\" \n");
-        resultSet = statement.executeQuery(strSQL.toString());
-        String date="";
-        int n=0;
-        while (resultSet.next()) {
-            JSONObject R=new JSONObject();
-            R.put("id",n++);
-            int i=1;
-            R.put("PLAYER",resultSet.getString(i++));
-            for(int j=0;j<5;j++)
-            {
-                int win=resultSet.getInt(i++);
-                int total=resultSet.getInt(i++);
-                double percentage=((double)win)/total;
-                JSONObject Z=new JSONObject();
-                Z.put("WIN",win);
-                Z.put("TOTAL",total);
-                Z.put("PERCENTAGE",percentage);
-                Z.put("RED",percentage>over[j]);
-                R.put(tab[j],Z);
+        // 注意：原代码此处查询了 t_base，但取值时使用了类似 v_player 视图的循环。
+        // 为了确保代码安全执行暂不抛弃原逻辑，直接平移。
+        String sql = "select \"DJH\",\"DATE\",\"PLAYER_1\",\"PLAYER_2\",\"PLAYER_3\",\"PLAYER_4\",\"PLAYER_5\",\"PLAYER_6\",\"PLAYER_7\",\"PLAYER_8\",\"WIN\" " +
+                "from t_base order by \"DATE\"";
+
+        List<JSONObject> res = jdbcTemplate.query(sql, (rs, rowNum) -> {
+            JSONObject R = new JSONObject();
+            R.put("id", rowNum);
+            int i = 1;
+            R.put("PLAYER", rs.getString(i++));
+            for (int j = 0; j < 5; j++) {
+                int win = rs.getInt(i++);
+                int total = rs.getInt(i++);
+                double percentage = total == 0 ? 0.0 : ((double) win) / total;
+                JSONObject Z = new JSONObject();
+                Z.put("WIN", win);
+                Z.put("TOTAL", total);
+                Z.put("PERCENTAGE", percentage);
+                Z.put("RED", percentage > over[j]);
+                R.put(tab[j], Z);
             }
-            R.put("TOTAL",resultSet.getInt(i-1));
-            res.add(R);
-        }
-        if (resultSet != null) {
-            resultSet.close();
-        }
-        if (statement != null) {
-            statement.close();
-        }
-        if (connection != null) {
-            connection.close();
-        }
+            R.put("TOTAL", rs.getInt(i - 1));
+            return R;
+        });
 
-        JSONObject obj=new JSONObject();
-        obj.put("results",res);
+        JSONObject obj = new JSONObject();
+        obj.put("results", res);
         return obj;
     }
 
+    public JSONObject getRoleZhu(String c_role) {
+        String[] tab = {"ZHONG", "FAN", "NEI", "QUAN"};
+        double[] over = baseService.getOverView(false);
 
-    public JSONObject getRoleZhu(String c_role) throws  SQLException{
-        Connection connection = null;
-        Statement statement = null;
-        ResultSet resultSet = null;
-        ArrayList<JSONObject> res=new ArrayList<>();
-        //String  tab[]={"PLAYER","WIN_ZHU","TOTAL_ZHU","WIN_ZHONG","TOTAL_ZHONG","WIN_FAN","TOTAL_FAN","WIN_NEI","TOTAL_NEI","WIN","TOTAL"};
-        String  tab[]={"ZHONG","FAN","NEI","QUAN"};
-        double over[]= BaseService.getOverView(this.dataSource);
+        String sql = "select \"ROLE\",\"WIN_ZHONG\",\"TOTAL_ZHONG\",\"WIN_FAN\",\"TOTAL_FAN\",\"WIN_NEI\",\"TOTAL_NEI\",\"WIN\",\"TOTAL\" " +
+                "from f_zhu_role(?) order by \"TOTAL\"";
 
-        connection = this.dataSource.getConnection();
-        statement = connection.createStatement();
-        StringBuilder strSQL=new StringBuilder();
-        strSQL.append("select \"ROLE\",\"WIN_ZHONG\",\"TOTAL_ZHONG\",\"WIN_FAN\",\"TOTAL_FAN\",\"WIN_NEI\",\"TOTAL_NEI\",\"WIN\",\"TOTAL\"\n");
-        strSQL.append(" from f_zhu_role('");
-        strSQL.append(c_role);
-        strSQL.append("')\n");
-        strSQL.append("order by \"TOTAL\" \n");
-        resultSet = statement.executeQuery(strSQL.toString());
-        String date="";
-        int n=0;
-        while (resultSet.next()) {
-            JSONObject R=new JSONObject();
-            R.put("id",n++);
-            int i=1;
-            R.put("ROLE",resultSet.getString(i++));
-            for(int j=0;j<4;j++)
-            {
-                int win=resultSet.getInt(i++);
-                int total=resultSet.getInt(i++);
-                double percentage=((double)win)/total;
-                JSONObject Z=new JSONObject();
-                Z.put("WIN",win);
-                Z.put("TOTAL",total);
-                Z.put("PERCENTAGE",percentage);
-                Z.put("RED",percentage>over[j]);
-                R.put(tab[j],Z);
+        List<JSONObject> res = jdbcTemplate.query(sql, (rs, rowNum) -> {
+            JSONObject R = new JSONObject();
+            R.put("id", rowNum);
+            int i = 1;
+            R.put("ROLE", rs.getString(i++));
+            for (int j = 0; j < 4; j++) {
+                int win = rs.getInt(i++);
+                int total = rs.getInt(i++);
+                double percentage = total == 0 ? 0.0 : ((double) win) / total;
+                JSONObject Z = new JSONObject();
+                Z.put("WIN", win);
+                Z.put("TOTAL", total);
+                Z.put("PERCENTAGE", percentage);
+                Z.put("RED", percentage > over[j]);
+                R.put(tab[j], Z);
             }
-            R.put("TOTAL",resultSet.getInt(i-1));
-            res.add(R);
-        }
-        if (resultSet != null) {
-            resultSet.close();
-        }
-        if (statement != null) {
-            statement.close();
-        }
-        if (connection != null) {
-            connection.close();
-        }
+            R.put("TOTAL", rs.getInt(i - 1));
+            return R;
+        }, c_role);
 
-        JSONObject obj=new JSONObject();
-        obj.put("results",res);
+        JSONObject obj = new JSONObject();
+        obj.put("results", res);
         return obj;
     }
 
-    public JSONObject getRoleCompare(String c_role_1,String c_role_2) throws  SQLException{
-        Connection connection = null;
-        Statement statement = null;
-        ResultSet resultSet = null;
+    public JSONObject getRoleCompare(String c_role_1, String c_role_2) {
+        String sql = "select \"DESCRIBE\",\"COUNT\" from f_compare_role(?, ?) order by \"DESCRIBE\"";
+        return executeCompareQuery(sql, c_role_1, c_role_2);
+    }
 
-        //String  tab[]={"PLAYER","WIN_ZHU","TOTAL_ZHU","WIN_ZHONG","TOTAL_ZHONG","WIN_FAN","TOTAL_FAN","WIN_NEI","TOTAL_NEI","WIN","TOTAL"};
-        String  tab[]={"","ROLE1_WIN","ROLE2_WIN","TWO_WIN",""};
-        double over[]= BaseService.getOverView(this.dataSource);
+    public JSONObject getPlayerCompare(String c_player_1, String c_player_2) {
+        String sql = "select \"DESCRIBE\",\"COUNT\" from f_compare(?, ?) order by \"DESCRIBE\"";
+        return executeCompareQuery(sql, c_player_1, c_player_2);
+    }
 
-        connection = this.dataSource.getConnection();
-        statement = connection.createStatement();
-        StringBuilder strSQL=new StringBuilder();
-        strSQL.append("select \"DESCRIBE\",\"COUNT\"\n");
-        strSQL.append(" from f_compare_role('");
-        strSQL.append(c_role_1);
-        strSQL.append("','");
-        strSQL.append(c_role_2);
-        strSQL.append("')\n");
-        strSQL.append("order by \"DESCRIBE\" \n");
-        resultSet = statement.executeQuery(strSQL.toString());
-        String date="";
-        int sum_butong=0;
-        int sum_tong=0;
-        JSONObject R=new JSONObject();
-        int i=0;
-        while (resultSet.next()) {
-            int count=resultSet.getInt(2);
-            if(i<3)
-                sum_butong+=count;
-            else if (i<5)
-                sum_tong+=count;
-            if(!tab[i].isEmpty())
-                R.put(tab[i],count);
-            i++;
-        }
-        R.put("SUM_BUTONG",sum_butong);
-        R.put("SUM_TONG",sum_tong);
-        if (resultSet != null) {
-            resultSet.close();
-        }
-        if (statement != null) {
-            statement.close();
-        }
-        if (connection != null) {
-            connection.close();
-        }
+    // 将两个 Compare 方法重复的解析逻辑提取成公共方法
+    private JSONObject executeCompareQuery(String sql, String arg1, String arg2) {
+        String[] tab = {"", "ROLE1_WIN", "ROLE2_WIN", "TWO_WIN", ""};
+        JSONObject R = new JSONObject();
+        int[] sums = new int[2]; // sums[0]为butong，sums[1]为tong
+        int[] index = new int[1];
+
+        jdbcTemplate.query(sql, rs -> {
+            int count = rs.getInt(2);
+            int i = index[0];
+
+            if (i < 3) sums[0] += count;
+            else if (i < 5) sums[1] += count;
+
+            if (i < tab.length && !tab[i].isEmpty()) {
+                R.put(tab[i], count);
+            }
+            index[0]++;
+        }, arg1, arg2);
+
+        R.put("SUM_BUTONG", sums[0]);
+        R.put("SUM_TONG", sums[1]);
         return R;
     }
-
-    public JSONObject getPlayerCompare(String c_player_1,String c_player_2) throws  SQLException{
-        Connection connection = null;
-        Statement statement = null;
-        ResultSet resultSet = null;
-
-        //String  tab[]={"PLAYER","WIN_ZHU","TOTAL_ZHU","WIN_ZHONG","TOTAL_ZHONG","WIN_FAN","TOTAL_FAN","WIN_NEI","TOTAL_NEI","WIN","TOTAL"};
-        String  tab[]={"","ROLE1_WIN","ROLE2_WIN","TWO_WIN",""};
-        double over[]= BaseService.getOverView(this.dataSource);
-
-        connection = this.dataSource.getConnection();
-        statement = connection.createStatement();
-        StringBuilder strSQL=new StringBuilder();
-        strSQL.append("select \"DESCRIBE\",\"COUNT\"\n");
-        strSQL.append(" from f_compare('");
-        strSQL.append(c_player_1);
-        strSQL.append("','");
-        strSQL.append(c_player_2);
-        strSQL.append("')\n");
-        strSQL.append("order by \"DESCRIBE\" \n");
-        resultSet = statement.executeQuery(strSQL.toString());
-        String date="";
-        int sum_butong=0;
-        int sum_tong=0;
-        JSONObject R=new JSONObject();
-        int i=0;
-        while (resultSet.next()) {
-            int count=resultSet.getInt(2);
-            if(i<3)
-                sum_butong+=count;
-            else if (i<5)
-                sum_tong+=count;
-            if(!tab[i].isEmpty())
-                R.put(tab[i],count);
-            i++;
-        }
-        R.put("SUM_BUTONG",sum_butong);
-        R.put("SUM_TONG",sum_tong);
-        if (resultSet != null) {
-            resultSet.close();
-        }
-        if (statement != null) {
-            statement.close();
-        }
-        if (connection != null) {
-            connection.close();
-        }
-        return R;
-    }
-
 }
